@@ -1,8 +1,10 @@
 # NexusOps
 
+[![CI](https://github.com/LeandroSatsuki/NexusOps/actions/workflows/ci.yml/badge.svg)](https://github.com/LeandroSatsuki/NexusOps/actions/workflows/ci.yml)
+
 NexusOps é uma base de produto interno para gestão de máquinas corporativas, alertas operacionais e chamados de suporte. O MVP é single-tenant, Windows-first e pensado para uma única empresa, sem módulos MSP, billing, multiempresa, acesso remoto ou patch management completo.
 
-## Nomes avaliados
+## Nomes Avaliados
 
 - AtlasDesk
 - NexusOps
@@ -17,7 +19,7 @@ Nome escolhido: **NexusOps**. É curto, profissional, funciona bem em português
 - Monorepo npm workspaces
 - Frontend: Next.js App Router, TypeScript, Tailwind e componentes shadcn-like locais
 - Backend: NestJS, TypeScript, Prisma, PostgreSQL
-- Auth: JWT access token, refresh token persistido em sessão auditável, bcrypt
+- Auth: JWT access token, refresh token rotativo persistido com hash em sessão auditável, bcrypt
 - RBAC: `ADMIN`, `TECNICO`, `GESTOR`, `SOLICITANTE`
 - Agente Windows: .NET 8 Worker Service
 - Testes: Vitest/Supertest no backend, Playwright no frontend, xUnit no agente
@@ -41,7 +43,7 @@ packages/
 docs/              documentação técnica
 ```
 
-## Execução local
+## Execução Local
 
 Pré-requisitos: Node.js 20+, npm 10+, Docker Desktop, .NET SDK 8.
 
@@ -88,12 +90,13 @@ Também é possível usar Docker Compose para a stack completa:
 docker compose up --build
 ```
 
-## Scripts principais
+## Scripts Principais
 
 - `npm run dev:api`
 - `npm run dev:web`
 - `npm run db:migrate`
 - `npm run db:seed`
+- `npm run lint`
 - `npm run test`
 - `npm run build`
 
@@ -104,9 +107,23 @@ dotnet test apps/agent-windows/NexusOps.Agent.Tests
 dotnet run --project apps/agent-windows/NexusOps.Agent
 ```
 
+## CI
+
+O projeto possui GitHub Actions em `.github/workflows/ci.yml`, executado em `push` e `pull_request` para `main`.
+
+A pipeline valida:
+
+- instalação das dependências do monorepo com npm workspaces;
+- lint de API e Web com ESLint;
+- build da API NestJS e da Web Next.js;
+- testes da API com PostgreSQL de CI, migrations e seed;
+- smoke test do frontend com Playwright.
+
+O teste E2E completo do fluxo crítico fica separado em `npm run test:e2e -w @nexusops/web`, porque depende da API e de dados seedados em execução.
+
 ## Funcionalidades do MVP
 
-- Login, refresh token, logout, alteração de senha e recuperação mockada.
+- Login, refresh token rotativo, logout, alteração de senha e recuperação mockada.
 - RBAC por papel e guards no backend.
 - CRUD básico de usuários.
 - Inventário de máquinas com filtros e heartbeat.
@@ -118,7 +135,7 @@ dotnet run --project apps/agent-windows/NexusOps.Agent
 - SLA simples por prioridade.
 - Audit log para ações críticas.
 
-## Limitações intencionais
+## Limitações Intencionais
 
 - Não há multi-tenant.
 - Não há acesso remoto gráfico, shell remoto ou execução de scripts remotos.
@@ -128,9 +145,9 @@ dotnet run --project apps/agent-windows/NexusOps.Agent
 - O storage de anexos está preparado, mas o upload visual completo fica para a próxima fase.
 - O motor de alertas periódico ainda deve ser promovido para job/worker.
 
-## Roadmap técnico
+## Roadmap Técnico
 
-1. Endurecer autenticação: rotação de refresh token, MFA opcional e política de senha.
+1. Endurecer autenticação: MFA opcional, política de senha e bloqueio temporário por tentativas.
 2. Finalizar upload de anexos com antivírus/limites e driver S3/MinIO.
 3. Criar worker de alertas recorrentes para offline, agente antigo e SLA.
 4. Melhorar filtros salvos por usuário e paginação server-side.
@@ -142,4 +159,3 @@ dotnet run --project apps/agent-windows/NexusOps.Agent
 ## Licença
 
 Projeto interno. O arquivo `LICENSE` usa um modelo proprietário simples; revise com jurídico antes de distribuir fora da empresa.
-

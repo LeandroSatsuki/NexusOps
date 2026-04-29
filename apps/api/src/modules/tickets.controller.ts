@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Param, Patch, Post, Query } from "@nestjs/common";
 import { TicketPriority, TicketStatus, UserRole } from "@prisma/client";
 import { CurrentUser, RequestUser } from "../common/current-user.decorator";
 import { Roles } from "../common/roles.decorator";
@@ -7,7 +7,7 @@ import { TicketsService } from "./tickets.service";
 
 @Controller("tickets")
 export class TicketsController {
-  constructor(private readonly tickets: TicketsService) {}
+  constructor(@Inject(TicketsService) private readonly tickets: TicketsService) {}
 
   @Get()
   list(

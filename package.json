@@ -11,15 +11,19 @@
     "dev": "concurrently \"npm run dev -w @nexusops/api\" \"npm run dev -w @nexusops/web\"",
     "dev:api": "npm run dev -w @nexusops/api",
     "dev:web": "npm run dev -w @nexusops/web",
-    "build": "npm run build -ws --if-present",
-    "lint": "npm run lint -ws --if-present",
-    "test": "npm run test -ws --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "db:migrate": "npm run db:migrate -w @nexusops/api",
     "db:seed": "npm run db:seed -w @nexusops/api",
     "setup": "npm install && npm run db:migrate && npm run db:seed"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "@eslint/js": "^9.17.0",
+    "@next/eslint-plugin-next": "^15.1.2",
+    "concurrently": "^9.1.0",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.18.2"
   },
   "engines": {
     "node": ">=20.11.0",

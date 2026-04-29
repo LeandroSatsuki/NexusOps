@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import * as bcrypt from "bcryptjs";
+import { createHash, randomUUID } from "crypto";
 import { UserStatus } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
 import { AuditService } from "../common/audit.service";
@@ -22,8 +23,11 @@ const publicUserSelect = {
 @Injectable()
 export class AuthService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(JwtService)
     private readonly jwt: JwtService,
+    @Inject(AuditService)
     private readonly audit: AuditService
   ) {}
 
@@ -49,7 +53,7 @@ export class AuthService {
     const refreshToken = await this.signRefresh(user.id, session.id);
     await this.prisma.session.update({
       where: { id: session.id },
-      data: { refreshHash: await bcrypt.hash(refreshToken, Number(process.env.BCRYPT_ROUNDS ?? 12)) }
+      data: { refreshHash: await this.hashRefreshToken(refreshToken) }
     });
     await this.audit.log({ actorId: user.id, action: "auth.login", entity: "Session", entityId: session.id, ipAddress: meta.ipAddress });
 
@@ -62,17 +66,41 @@ export class AuthService {
 
   async refresh(refreshToken: string, meta: { ipAddress?: string }) {
     try {
-      const payload = await this.jwt.verifyAsync<{ sub: string; sessionId: string }>(refreshToken, {
+      const payload = await this.jwt.verifyAsync<{ sub: string; sessionId: string; jti?: string }>(refreshToken, {
         secret: process.env.JWT_REFRESH_SECRET
       });
       const session = await this.prisma.session.findUnique({ where: { id: payload.sessionId }, include: { user: true } });
-      if (!session || session.revokedAt || session.expiresAt < new Date()) throw new UnauthorizedException("Sessão expirada.");
-      const valid = await bcrypt.compare(refreshToken, session.refreshHash);
-      if (!valid) throw new UnauthorizedException("Refresh token inválido.");
+      if (!session || session.revokedAt || session.expiresAt < new Date() || session.user.status !== UserStatus.ATIVO) {
+        throw new UnauthorizedException("Refresh token inválido.");
+      }
+      const valid = await this.verifyRefreshToken(refreshToken, session.refreshHash);
+      if (!valid) {
+        await this.prisma.session.updateMany({
+          where: { id: session.id, revokedAt: null },
+          data: { revokedAt: new Date(), lastUsedAt: new Date(), ipAddress: meta.ipAddress }
+        });
+        await this.audit.log({
+          actorId: session.userId,
+          action: "auth.refresh_reuse_detected",
+          entity: "Session",
+          entityId: session.id,
+          ipAddress: meta.ipAddress
+        });
+        throw new UnauthorizedException("Refresh token inválido.");
+      }
 
-      await this.prisma.session.update({ where: { id: session.id }, data: { lastUsedAt: new Date(), ipAddress: meta.ipAddress } });
+      const nextRefreshToken = await this.signRefresh(session.user.id, session.id);
+      await this.prisma.session.update({
+        where: { id: session.id },
+        data: {
+          refreshHash: await this.hashRefreshToken(nextRefreshToken),
+          lastUsedAt: new Date(),
+          ipAddress: meta.ipAddress
+        }
+      });
       return {
-        accessToken: await this.signAccess(session.user.id, session.user.email, session.user.role, session.id)
+        accessToken: await this.signAccess(session.user.id, session.user.email, session.user.role, session.id),
+        refreshToken: nextRefreshToken
       };
     } catch {
       throw new UnauthorizedException("Refresh token inválido.");
@@ -119,7 +147,18 @@ export class AuthService {
 
   private signRefresh(sub: string, sessionId: string) {
     const days = Number(process.env.JWT_REFRESH_TTL_DAYS ?? 14);
-    return this.jwt.signAsync({ sub, sessionId }, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: `${days}d` });
+    return this.jwt.signAsync({ sub, sessionId, jti: randomUUID() }, { secret: process.env.JWT_REFRESH_SECRET, expiresIn: `${days}d` });
+  }
+
+  private refreshDigest(refreshToken: string) {
+    return createHash("sha256").update(refreshToken).digest("hex");
+  }
+
+  private hashRefreshToken(refreshToken: string) {
+    return bcrypt.hash(this.refreshDigest(refreshToken), Number(process.env.BCRYPT_ROUNDS ?? 12));
+  }
+
+  private verifyRefreshToken(refreshToken: string, refreshHash: string) {
+    return bcrypt.compare(this.refreshDigest(refreshToken), refreshHash);
   }
 }
-

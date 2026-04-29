@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: "20"
+  DATABASE_URL: postgresql://nexusops:nexusops_ci_password@localhost:5432/nexusops_ci?schema=public
+  JWT_ACCESS_SECRET: ci-access-secret-change-me-with-32-plus-chars
+  JWT_REFRESH_SECRET: ci-refresh-secret-change-me-with-32-plus-chars
+  JWT_ACCESS_TTL: 15m
+  JWT_REFRESH_TTL_DAYS: 14
+  AGENT_SHARED_TOKEN: ci-agent-token-change-me
+  BCRYPT_ROUNDS: 4
+  NEXT_PUBLIC_API_URL: http://localhost:3333
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  install-and-lint:
+    name: Install and lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Lint workspaces
+        run: npm run lint
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build workspaces
+        run: npm run build
+
+  test-api:
+    name: API tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: nexusops
+          POSTGRES_PASSWORD: nexusops_ci_password
+          POSTGRES_DB: nexusops_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nexusops -d nexusops_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Generate Prisma client
+        run: npm run db:generate -w @nexusops/api
+
+      - name: Apply migrations
+        run: npm run db:deploy -w @nexusops/api
+
+      - name: Seed CI database
+        run: npm run db:seed -w @nexusops/api
+
+      - name: Run API tests
+        run: npm run test -w @nexusops/api
+
+  test-web:
+    name: Web smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run web smoke tests
+        run: npm run test:smoke -w @nexusops/web
+

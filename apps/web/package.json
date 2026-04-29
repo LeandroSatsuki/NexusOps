@@ -6,8 +6,10 @@
     "dev": "next dev -p 3000",
     "build": "next build",
     "start": "next start -p 3000",
-    "lint": "next lint",
-    "test": "playwright test"
+    "lint": "eslint -c ../../eslint.config.mjs \"app/**/*.{ts,tsx}\" \"lib/**/*.{ts,tsx}\" \"tests/**/*.ts\"",
+    "test": "npm run test:smoke",
+    "test:smoke": "playwright test tests/smoke.spec.ts",
+    "test:e2e": "playwright test tests/critical-flow.e2e.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.2.0",
@@ -33,4 +35,3 @@
     "typescript": "^5.7.2"
   }
 }
-

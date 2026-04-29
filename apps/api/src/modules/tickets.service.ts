@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable } from "@nestjs/common";
 import { CommentVisibility, TicketPriority, TicketStatus } from "@prisma/client";
 import { PrismaService } from "../common/prisma.service";
 import { AuditService } from "../common/audit.service";
@@ -7,7 +7,9 @@ import { CreateCommentDto, CreateTicketDto, UpdateTicketDto } from "./dtos";
 @Injectable()
 export class TicketsService {
   constructor(
+    @Inject(PrismaService)
     private readonly prisma: PrismaService,
+    @Inject(AuditService)
     private readonly audit: AuditService
   ) {}
 

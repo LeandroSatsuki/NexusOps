@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Post, Req } from "@nestjs/common";
+import { Body, Controller, Get, Inject, Post, Req } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { Request } from "express";
 import { CurrentUser, RequestUser } from "../common/current-user.decorator";
 import { Public } from "../common/public.decorator";
@@ -7,16 +8,18 @@ import { ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshDto } from "./dt
 
 @Controller("auth")
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 
   @Public()
   @Post("login")
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   login(@Body() dto: LoginDto, @Req() req: Request) {
     return this.auth.login(dto, { ipAddress: req.ip, userAgent: req.headers["user-agent"] });
   }
 
   @Public()
   @Post("refresh")
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   refresh(@Body() dto: RefreshDto, @Req() req: Request) {
     return this.auth.refresh(dto.refreshToken, { ipAddress: req.ip });
   }
@@ -38,8 +41,8 @@ export class AuthController {
 
   @Public()
   @Post("forgot-password")
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto.email);
   }
 }
-
