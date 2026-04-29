@@ -1,0 +1,352 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  TECNICO
+  GESTOR
+  SOLICITANTE
+}
+
+enum UserStatus {
+  ATIVO
+  INATIVO
+}
+
+enum MachineStatus {
+  ONLINE
+  OFFLINE
+  INATIVO
+}
+
+enum AlertSeverity {
+  INFO
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum AlertStatus {
+  ABERTO
+  RECONHECIDO
+  RESOLVIDO
+}
+
+enum AlertRuleType {
+  MACHINE_OFFLINE
+  LOW_DISK
+  OUTDATED_AGENT
+  MISSING_HEARTBEAT
+}
+
+enum TicketStatus {
+  NOVO
+  TRIAGEM
+  EM_ANDAMENTO
+  AGUARDANDO_USUARIO
+  AGUARDANDO_TERCEIRO
+  RESOLVIDO
+  FECHADO
+  CANCELADO
+}
+
+enum TicketPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum TicketChannel {
+  MANUAL
+  PORTAL
+  ALERTA
+}
+
+enum CommentVisibility {
+  PUBLICO
+  INTERNO
+  SISTEMA
+}
+
+model User {
+  id                      String                   @id @default(uuid())
+  name                    String
+  email                   String                   @unique
+  passwordHash            String
+  jobTitle                String?
+  departmentId            String?
+  department              Department?              @relation(fields: [departmentId], references: [id])
+  role                    UserRole                 @default(SOLICITANTE)
+  status                  UserStatus               @default(ATIVO)
+  avatarUrl               String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  sessions                Session[]
+  requestedTickets        Ticket[]                 @relation("TicketRequester")
+  assignedTickets         Ticket[]                 @relation("TicketAssignee")
+  machinePrimary          Machine[]                @relation("PrimaryUser")
+  alertsAssigned          Alert[]                  @relation("AlertAssignee")
+  comments                TicketComment[]
+  auditLogs               AuditLog[]               @relation("AuditActor")
+  notificationPreferences NotificationPreference[]
+}
+
+model Department {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  users     User[]
+  machines  Machine[]
+}
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tickets   Ticket[]
+}
+
+model Session {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshHash  String
+  userAgent    String?
+  ipAddress    String?
+  revokedAt    DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+  lastUsedAt    DateTime?
+}
+
+model Machine {
+  id                 String             @id @default(uuid())
+  installId          String?            @unique
+  hostname           String
+  friendlyName       String?
+  assetTag           String?
+  serialNumber       String?
+  osName             String
+  osVersion          String?
+  domainOrWorkgroup  String?
+  primaryUserId      String?
+  primaryUser        User?              @relation("PrimaryUser", fields: [primaryUserId], references: [id])
+  currentUser        String?
+  localIp            String?
+  macAddress         String?
+  cpuName            String?
+  totalRamMb         Int?
+  totalStorageGb     Int?
+  freeStorageGb      Int?
+  status             MachineStatus      @default(OFFLINE)
+  lastHeartbeatAt    DateTime?
+  agentVersion       String?
+  departmentId       String?
+  department         Department?        @relation(fields: [departmentId], references: [id])
+  branch             String?
+  notes              String?
+  inactiveAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  heartbeats         MachineHeartbeat[]
+  tickets            Ticket[]
+  alerts             Alert[]
+  tags               MachineTag[]
+}
+
+model MachineHeartbeat {
+  id              String   @id @default(uuid())
+  machineId       String
+  machine         Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  hostname        String
+  loggedUser      String?
+  osName          String
+  osVersion       String?
+  localIp         String?
+  cpuName         String?
+  totalRamMb      Int?
+  totalStorageGb  Int?
+  freeStorageGb   Int?
+  uptimeSeconds   Int?
+  agentVersion    String?
+  receivedAt      DateTime @default(now())
+}
+
+model Alert {
+  id             String        @id @default(uuid())
+  title          String
+  description    String?
+  severity       AlertSeverity @default(MEDIA)
+  status         AlertStatus   @default(ABERTO)
+  machineId      String
+  machine        Machine       @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  assigneeId     String?
+  assignee       User?         @relation("AlertAssignee", fields: [assigneeId], references: [id])
+  note           String?
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model AlertRule {
+  id                   String        @id @default(uuid())
+  type                 AlertRuleType @unique
+  name                 String
+  severity             AlertSeverity @default(MEDIA)
+  isEnabled            Boolean       @default(true)
+  thresholdMinutes     Int?
+  thresholdPercent     Int?
+  expectedAgentVersion String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+}
+
+model Ticket {
+  id              String                @id @default(uuid())
+  friendlyId      String                @unique
+  title           String
+  description     String
+  status          TicketStatus          @default(NOVO)
+  priority        TicketPriority        @default(MEDIA)
+  category        String
+  requesterId     String
+  requester       User                  @relation("TicketRequester", fields: [requesterId], references: [id])
+  assigneeId      String?
+  assignee        User?                 @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  teamId          String?
+  team            Team?                 @relation(fields: [teamId], references: [id])
+  machineId       String?
+  machine         Machine?              @relation(fields: [machineId], references: [id])
+  slaPolicyId     String?
+  slaPolicy       SlaPolicy?            @relation(fields: [slaPolicyId], references: [id])
+  dueAt           DateTime?
+  firstResponseAt DateTime?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  channel         TicketChannel         @default(MANUAL)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  comments        TicketComment[]
+  attachments     TicketAttachment[]
+  checklist       TicketChecklistItem[]
+  activities      TicketActivityLog[]
+  tags            TicketTag[]
+}
+
+model TicketComment {
+  id         String            @id @default(uuid())
+  ticketId   String
+  ticket     Ticket            @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?             @relation(fields: [authorId], references: [id])
+  body       String
+  visibility CommentVisibility @default(PUBLICO)
+  createdAt  DateTime          @default(now())
+}
+
+model TicketAttachment {
+  id         String   @id @default(uuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  fileName   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  createdAt  DateTime @default(now())
+}
+
+model TicketChecklistItem {
+  id          String   @id @default(uuid())
+  ticketId    String
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  title       String
+  isCompleted Boolean  @default(false)
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TicketActivityLog {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId   String?
+  action    String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id])
+  action     String
+  entity     String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
+
+model Tag {
+  id        String       @id @default(uuid())
+  name      String       @unique
+  color     String?
+  createdAt DateTime     @default(now())
+  machines  MachineTag[]
+  tickets   TicketTag[]
+}
+
+model MachineTag {
+  machineId String
+  tagId     String
+  machine   Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([machineId, tagId])
+}
+
+model TicketTag {
+  ticketId String
+  tagId    String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag      Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+}
+
+model NotificationPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   String
+  enabled   Boolean  @default(true)
+  settings  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SlaPolicy {
+  id                   String         @id @default(uuid())
+  name                 String
+  priority             TicketPriority @unique
+  firstResponseMinutes Int
+  resolutionMinutes    Int
+  isActive             Boolean        @default(true)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  tickets              Ticket[]
+}

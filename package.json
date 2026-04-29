@@ -1,0 +1,28 @@
+{
+  "name": "nexusops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NexusOps - plataforma interna de ativos, alertas e chamados.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev -w @nexusops/api\" \"npm run dev -w @nexusops/web\"",
+    "dev:api": "npm run dev -w @nexusops/api",
+    "dev:web": "npm run dev -w @nexusops/web",
+    "build": "npm run build -ws --if-present",
+    "lint": "npm run lint -ws --if-present",
+    "test": "npm run test -ws --if-present",
+    "db:migrate": "npm run db:migrate -w @nexusops/api",
+    "db:seed": "npm run db:seed -w @nexusops/api",
+    "setup": "npm install && npm run db:migrate && npm run db:seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20.11.0",
+    "npm": ">=10.0.0"
+  }
+}
