@@ -116,8 +116,7 @@ jobs:
         run: npm install
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npm exec -w @nexusops/web -- playwright install --with-deps chromium
 
       - name: Run web smoke tests
         run: npm run test:smoke -w @nexusops/web
-
